@@ -5,12 +5,13 @@
 #include "Delay.h"
 #include "Timer.h"   // 包含 TIM2 中断（10ms）
 #include "Motor.h"   // 包含 Motor1_SetSpeed() / Motor2_SetSpeed()
+#include "Key.h"
 
 // ========== PID 参数（两个电机共用，也可分开） ==========
-float Kp = 0.5f, Ki = 0.05f, Kd = 0.01f;
+float Kp = 1.0f, Ki = 0.1f, Kd = 0.05f;
 
 // ========== 电机1 增量式 PID 变量 ==========
-float Target1 = 0;      // 电机1 目标转速（RPM）
+float Target1 = 9;      // 电机1 目标转速（RPM）
 float Speed1 = 0.0f;       // 电机1 实际转速（RPM，由中断更新）
 float Out1 = 0.0f;         // 电机1 当前控制输出 [-100, 100]
 float Error1_k   = 0.0f;   // e(k)
@@ -32,6 +33,8 @@ float constrain(float x, float min, float max) {
     return x;
 }
 
+int8_t renwu = 1; //默认第一项功能
+
 int main(void)
 {
     // ----- 初始化所有外设 -----
@@ -41,10 +44,13 @@ int main(void)
     Encoder1_Init();      // 电机1 编码器（TIM3 / PA6/PA7）
     Encoder2_Init();      // 电机2 编码器（TIM4 / PB6/PB7）
     Motor_Init();         // 电机驱动初始化
+	Key_Init();
 
     // ----- 主循环：只负责显示，不参与控制（控制在中断里）-----
     while (1)
     {
+		if(Key_Check(KEY_1,KEY_DOWN)==1)
+			renwu=1-renwu;
         // --- 电机1 显示信息 ---
         OLED_ShowNum(1, 1, (int)Target1, 3);      // 目标转速
         OLED_ShowNum(2, 1, (int)Speed1, 4);       // 实际转速
@@ -52,6 +58,8 @@ int main(void)
         OLED_ShowNum(1, 6, (int)Error1_k, 5);     // 当前误差 e(k)
         OLED_ShowNum(2, 6, (int)Error1_k_1, 5);   // 上次误差 e(k-1)
         OLED_ShowNum(4, 6, (int)Error1_k_2, 10);  // 上上次误差 e(k-2)
+				
+		OLED_ShowNum(4,1,renwu,1);
 
         Delay_ms(100);  // 降低 OLED 刷新率，提升显示稳定性
     }
@@ -63,47 +71,81 @@ void TIM2_IRQHandler(void)
     if (TIM_GetITStatus(TIM2, TIM_IT_Update) == SET)
     {
         Count++;
-        if (Count >= 10)  // 10ms 控制周期
-        {
-            Count = 0;
+		if (renwu == 0)											//第一项功能
+		{
+			if (Count >= 10)  // 10ms 控制周期
+			{
+				Count = 0;
+				// ========== 电机1 增量式 PID 控制 ==========
+				int16_t pulse1 = Encoder1_Get();               // 10ms 脉冲增量
+				Speed1 = Encoder1_GetRPM(pulse1);              // 计算 RPM
 
-            // ========== 电机1 增量式 PID 控制 ==========
-            int16_t pulse1 = Encoder1_Get();               // 10ms 脉冲增量
-            Speed1 = Encoder1_GetRPM(pulse1);              // 计算 RPM
+				float e1_k = Target1 - Speed1;                 // e(k)
+				float deltaOut1 = Kp * (e1_k - Error1_k_1) 
+								+ Ki * e1_k 
+								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
 
-            float e1_k = Target1 - Speed1;                 // e(k)
-            float deltaOut1 = Kp * (e1_k - Error1_k_1) 
-                            + Ki * e1_k 
-                            + Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
+				Out1 += deltaOut1;
+				Out1 = constrain(Out1, -150.0f, 150.0f);       // 限幅
 
-            Out1 += deltaOut1;
-            Out1 = constrain(Out1, -150.0f, 150.0f);       // 限幅
+				// 更新历史误差
+				Error1_k_2 = Error1_k_1;
+				Error1_k_1 = e1_k;
 
-            // 更新历史误差
-            Error1_k_2 = Error1_k_1;
-            Error1_k_1 = e1_k;
-
-            Motor1_SetSpeed((int)Out1);                    // 控制电机1
+				Motor1_SetSpeed((int)Out1);                    // 控制电机1
 
 
-            // ========== 电机2 增量式 PID 控制 ==========
-            int16_t pulse2 = Encoder2_Get();               // 10ms 脉冲增量
-            Speed2 = Encoder2_GetRPM(pulse2);
+				// ========== 电机2 增量式 PID 控制 ==========
+				int16_t pulse2 = Encoder2_Get();               // 10ms 脉冲增量
+				Speed2 = Encoder2_GetRPM(pulse2);
 
-            float e2_k = Target2 - Speed2;
-            float deltaOut2 = Kp * (e2_k - Error2_k_1) 
-                            + Ki * e2_k 
-                            + Kd * (e2_k - 2 * Error2_k_1 + Error2_k_2);
+				float e2_k = Target2 - Speed2;
+				float deltaOut2 = Kp * (e2_k - Error2_k_1) 
+								+ Ki * e2_k 
+								+ Kd * (e2_k - 2 * Error2_k_1 + Error2_k_2);
 
-            Out2 += deltaOut2;
-            Out2 = constrain(Out2, -100.0f, 100.0f);
+				Out2 += deltaOut2;
+				Out2 = constrain(Out2, -100.0f, 100.0f);
 
-            Error2_k_2 = Error2_k_1;
-            Error2_k_1 = e2_k;
+				Error2_k_2 = Error2_k_1;
+				Error2_k_1 = e2_k;
 
-            Motor2_SetSpeed((int)Out2);                    // 控制电机2
-        }
+				Motor2_SetSpeed((int)Out2);                    // 控制电机2
+			}
 
-        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
-    }
+			TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+		}
+		else if (renwu == 1)                                   //第二项功能
+		{
+			if (Count >= 10)  // 10ms 控制周期
+			{
+				Count = 0;
+
+				// ========== 电机2 手动控制速度 ==========
+				int16_t pulse2 = Encoder2_Get();               // 10ms 脉冲增量
+				Speed2 = Encoder2_GetRPM(pulse2);              // 计算 RPM
+
+
+
+				// ========== 电机1 增量式 PID 控制 ==========
+				int16_t pulse1 = Encoder1_Get();               // 10ms 脉冲增量
+				Speed1 = Encoder1_GetRPM(pulse1);
+				Target1 = Speed2;
+
+				float e1_k = Target1 - Speed1;
+				float deltaOut1 = Kp * (e1_k - Error1_k_1) 
+								+ Ki * e1_k 
+								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
+
+				Out1 += deltaOut1;
+				Out1 = constrain(Out1, -100.0f, 100.0f);
+
+				Error1_k_2 = Error1_k_1;
+				Error1_k_1 = e1_k;
+
+				Motor1_SetSpeed((int)Out1);                    // 控制电机2
+			}
+			TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+		}
+	}
 }
