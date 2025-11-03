@@ -42,10 +42,11 @@ int16_t Encoder1_GetCount(void)
     return (int16_t)TIM_GetCounter(ENCODER1_TIM);
 }
 
-float Encoder1_GetRPM(int16_t pulse_10ms)
+int Encoder1_GetRPM(int16_t pulse_10ms)
 {
-    if (pulse_10ms == 0) return 0.0f;
-    return (float)pulse_10ms / ENCODER1_PULSES_REV * 6000.0f;
+    if (pulse_10ms == 0) return 0;
+    float rpm = (float)pulse_10ms / ENCODER1_PULSES_REV * 6000.0f;
+    return (int)(rpm + 0.5f);  // 四舍五入，最小步进为 1 ✅
 }
 
 // --------------------------
@@ -90,8 +91,9 @@ int16_t Encoder2_GetCount(void)
     return (int16_t)TIM_GetCounter(ENCODER2_TIM);
 }
 
-float Encoder2_GetRPM(int16_t pulse_10ms)
+int Encoder2_GetRPM(int16_t pulse_10ms)
 {
-    if (pulse_10ms == 0) return 0.0f;
-    return (float)pulse_10ms / ENCODER2_PULSES_REV * 6000.0f;
+    if (pulse_10ms == 0) return 0;
+    float rpm = (float)pulse_10ms / ENCODER2_PULSES_REV * 6000.0f;
+    return (int)(rpm + 0.5f);  // 四舍五入，最小步进为 1 ✅
 }

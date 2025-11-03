@@ -13,9 +13,8 @@
 #define ENCODER1_CHA_PIN     GPIO_Pin_6   // A相
 #define ENCODER1_CHB_PIN     GPIO_Pin_7   // B相
 
-#define ENCODER1_PPR         2500      // 电机1：编码器每圈脉冲数
-#define ENCODER1_MULTIPLY    4.0f
-#define ENCODER1_PULSES_REV  ((uint32_t)(ENCODER1_PPR * ENCODER1_MULTIPLY)/10*2)  // 10000
+// 霍尔编码器参数（TT130 减速后实际值）
+#define ENCODER1_PULSES_REV  2496  // 13 × 48 × 4 = 2496 脉冲/圈 ✅（直接使用实际值，不再用 PPR/MULTIPLY）
 
 // ======================
 // 电机2：TIM4 (PB6=A, PB7=B)
@@ -27,9 +26,8 @@
 #define ENCODER2_CHA_PIN     GPIO_Pin_6   // A相
 #define ENCODER2_CHB_PIN     GPIO_Pin_7   // B相
 
-#define ENCODER2_PPR         2500      // 电机2：编码器每圈脉冲数
-#define ENCODER2_MULTIPLY    4.0f
-#define ENCODER2_PULSES_REV  ((uint32_t)(ENCODER2_PPR * ENCODER2_MULTIPLY)/10*2)  // 10000
+// 霍尔编码器参数（TT130 减速后实际值）
+#define ENCODER2_PULSES_REV  2496  // 13 × 48 × 4 = 2496 脉冲/圈 ✅（直接使用实际值）
 
 // ======================
 // 函数声明
@@ -37,11 +35,11 @@
 void Encoder1_Init(void);
 int16_t Encoder1_Get(void);
 int16_t Encoder1_GetCount(void);
-float Encoder1_GetRPM(int16_t pulse_10ms);
+int Encoder1_GetRPM(int16_t pulse_10ms);
 
 void Encoder2_Init(void);
 int16_t Encoder2_Get(void);
 int16_t Encoder2_GetCount(void);
-float Encoder2_GetRPM(int16_t pulse_10ms);
+int Encoder2_GetRPM(int16_t pulse_10ms);
 
 #endif

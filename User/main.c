@@ -8,10 +8,10 @@
 #include "Key.h"
 
 // ========== PID 参数（两个电机共用，也可分开） ==========
-float Kp = 1.0f, Ki = 0.1f, Kd = 0.05f;
+float Kp = 2.0f, Ki = 0.1f, Kd = 0.05f;
 
 // ========== 电机1 增量式 PID 变量 ==========
-float Target1 = 9;      // 电机1 目标转速（RPM）
+float Target1 = 7;      // 电机1 目标转速（RPM）
 float Speed1 = 0.0f;       // 电机1 实际转速（RPM，由中断更新）
 float Out1 = 0.0f;         // 电机1 当前控制输出 [-100, 100]
 float Error1_k   = 0.0f;   // e(k)
@@ -33,7 +33,7 @@ float constrain(float x, float min, float max) {
     return x;
 }
 
-int8_t renwu = 1; //默认第一项功能
+int8_t renwu = 0; //默认第一项功能
 
 int main(void)
 {
@@ -45,6 +45,7 @@ int main(void)
     Encoder2_Init();      // 电机2 编码器（TIM4 / PB6/PB7）
     Motor_Init();         // 电机驱动初始化
 	Key_Init();
+	Serial_Init();
 
     // ----- 主循环：只负责显示，不参与控制（控制在中断里）-----
     while (1)
@@ -60,7 +61,8 @@ int main(void)
         OLED_ShowNum(4, 6, (int)Error1_k_2, 10);  // 上上次误差 e(k-2)
 				
 		OLED_ShowNum(4,1,renwu,1);
-
+		Serial_Printf("%f,%f,%f\r\n",Target1,Speed1,Out1);
+		
         Delay_ms(100);  // 降低 OLED 刷新率，提升显示稳定性
     }
 }
@@ -86,7 +88,7 @@ void TIM2_IRQHandler(void)
 								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
 
 				Out1 += deltaOut1;
-				Out1 = constrain(Out1, -150.0f, 150.0f);       // 限幅
+				Out1 = constrain(Out1, -1200.0f, 1200.0f);       // 限幅
 
 				// 更新历史误差
 				Error1_k_2 = Error1_k_1;
@@ -105,7 +107,7 @@ void TIM2_IRQHandler(void)
 								+ Kd * (e2_k - 2 * Error2_k_1 + Error2_k_2);
 
 				Out2 += deltaOut2;
-				Out2 = constrain(Out2, -100.0f, 100.0f);
+				Out2 = constrain(Out2, -300.0f, 300.0f);
 
 				Error2_k_2 = Error2_k_1;
 				Error2_k_1 = e2_k;
@@ -138,7 +140,7 @@ void TIM2_IRQHandler(void)
 								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
 
 				Out1 += deltaOut1;
-				Out1 = constrain(Out1, -100.0f, 100.0f);
+				Out1 = constrain(Out1, -300.0f, 300.0f);
 
 				Error1_k_2 = Error1_k_1;
 				Error1_k_1 = e1_k;
