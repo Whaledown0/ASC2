@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-uint8_t Serial_TxPacket[4];				//FF 01 02 03 04 FE
-uint8_t Serial_RxPacket[4];
+uint8_t Serial_RxData;
 uint8_t Serial_RxFlag;
 
 void Serial_Init(void)
@@ -104,14 +103,6 @@ void Serial_Printf(char *format, ...)
 	Serial_SendString(String);
 }
 
-
-void Serial_SendPacket(void)
-{
-	Serial_SendByte(0xFF);
-	Serial_SendArray(Serial_TxPacket, 4);
-	Serial_SendByte(0xFE);
-}
-
 uint8_t Serial_GetRxFlag(void)
 {
 	if (Serial_RxFlag == 1)
@@ -122,84 +113,17 @@ uint8_t Serial_GetRxFlag(void)
 	return 0;
 }
 
+uint8_t Serial_GetRxData(void)
+{
+	return Serial_RxData;
+}
+
 void USART1_IRQHandler(void)
 {
-	static uint8_t RxState = 0;
-	static uint8_t pRxPacket = 0;
 	if (USART_GetITStatus(USART1, USART_IT_RXNE) == SET)
 	{
-		uint8_t RxData = USART_ReceiveData(USART1);
-		
-		if (RxState == 0)
-		{
-			if (RxData == 0xFF)
-			{
-				RxState = 1;
-				pRxPacket = 0;
-			}
-		}
-		else if (RxState == 1)
-		{
-			Serial_RxPacket[pRxPacket] = RxData;
-			pRxPacket ++;
-			if (pRxPacket >= 4)
-			{
-				RxState = 2;
-			}
-		}
-		else if (RxState == 2)
-		{
-			if (RxData == 0xFE)
-			{
-				RxState = 0;
-				Serial_RxFlag = 1;
-			}
-		}
-		
+		Serial_RxData = USART_ReceiveData(USART1);
+		Serial_RxFlag = 1;
 		USART_ClearITPendingBit(USART1, USART_IT_RXNE);
 	}
-}
-
-// 添加VOFA+兼容的数据发送函数
-// FireWater文本格式发送浮点数
-void Serial_SendVOFA_FireWater(float *data, uint8_t num)
-{
-    char buffer[128];
-    char temp[20];
-    uint8_t i;
-    
-    buffer[0] = '\0'; // 清空缓冲区
-    
-    for(i = 0; i < num; i++) {
-        // 转换为字符串，保留3位小数
-        sprintf(temp, "%.3f", data[i]);
-        strcat(buffer, temp);
-        
-        // 添加逗号分隔符（最后一个数据后不加）
-        if(i < num - 1) {
-            strcat(buffer, ",");
-        }
-    }
-    
-    // 添加换行符
-    strcat(buffer, "\n");
-    
-    // 发送数据
-    Serial_SendString(buffer);
-}
-
-// 发送单个浮点数（简单测试用）
-void Serial_SendVOFA_Float(float data)
-{
-    char buffer[20];
-    sprintf(buffer, "%.3f\n", data);
-    Serial_SendString(buffer);
-}
-
-// 发送单个整数
-void Serial_SendVOFA_Int(int32_t data)
-{
-    char buffer[20];
-    sprintf(buffer, "%ld\n", data);
-    Serial_SendString(buffer);
 }

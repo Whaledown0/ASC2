@@ -8,10 +8,10 @@
 #include "Key.h"
 
 // ========== PID 参数（两个电机共用，也可分开） ==========
-float Kp = 2.0f, Ki = 0.1f, Kd = 0.05f;
+float Kp = 3.0f, Ki = 0.1f, Kd = 0.05f;
 
 // ========== 电机1 增量式 PID 变量 ==========
-float Target1 = 7;      // 电机1 目标转速（RPM）
+float Target1 = 0;      // 电机1 目标转速（RPM）
 float Speed1 = 0.0f;       // 电机1 实际转速（RPM，由中断更新）
 float Out1 = 0.0f;         // 电机1 当前控制输出 [-100, 100]
 float Error1_k   = 0.0f;   // e(k)
@@ -34,6 +34,7 @@ float constrain(float x, float min, float max) {
 }
 
 int8_t renwu = 0; //默认第一项功能
+uint8_t RxData;
 
 int main(void)
 {
@@ -50,20 +51,19 @@ int main(void)
     // ----- 主循环：只负责显示，不参与控制（控制在中断里）-----
     while (1)
     {
-		if(Key_Check(KEY_1,KEY_DOWN)==1)
+		Key_Tick();
+		if(Key_Check(KEY_0,KEY_DOWN))
 			renwu=1-renwu;
+		RxData = Serial_GetRxData();
+		Target1 = RxData;
         // --- 电机1 显示信息 ---
         OLED_ShowNum(1, 1, (int)Target1, 3);      // 目标转速
         OLED_ShowNum(2, 1, (int)Speed1, 4);       // 实际转速
         OLED_ShowNum(3, 1, (int)Out1, 5);         // 控制输出
-        OLED_ShowNum(1, 6, (int)Error1_k, 5);     // 当前误差 e(k)
-        OLED_ShowNum(2, 6, (int)Error1_k_1, 5);   // 上次误差 e(k-1)
-        OLED_ShowNum(4, 6, (int)Error1_k_2, 10);  // 上上次误差 e(k-2)
 				
 		OLED_ShowNum(4,1,renwu,1);
 		Serial_Printf("%f,%f,%f\r\n",Target1,Speed1,Out1);
 		
-        Delay_ms(100);  // 降低 OLED 刷新率，提升显示稳定性
     }
 }
 
@@ -88,6 +88,8 @@ void TIM2_IRQHandler(void)
 								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
 
 				Out1 += deltaOut1;
+				
+				
 				Out1 = constrain(Out1, -1200.0f, 1200.0f);       // 限幅
 
 				// 更新历史误差
@@ -95,24 +97,6 @@ void TIM2_IRQHandler(void)
 				Error1_k_1 = e1_k;
 
 				Motor1_SetSpeed((int)Out1);                    // 控制电机1
-
-
-				// ========== 电机2 增量式 PID 控制 ==========
-				int16_t pulse2 = Encoder2_Get();               // 10ms 脉冲增量
-				Speed2 = Encoder2_GetRPM(pulse2);
-
-				float e2_k = Target2 - Speed2;
-				float deltaOut2 = Kp * (e2_k - Error2_k_1) 
-								+ Ki * e2_k 
-								+ Kd * (e2_k - 2 * Error2_k_1 + Error2_k_2);
-
-				Out2 += deltaOut2;
-				Out2 = constrain(Out2, -300.0f, 300.0f);
-
-				Error2_k_2 = Error2_k_1;
-				Error2_k_1 = e2_k;
-
-				Motor2_SetSpeed((int)Out2);                    // 控制电机2
 			}
 
 			TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
@@ -140,6 +124,21 @@ void TIM2_IRQHandler(void)
 								+ Kd * (e1_k - 2 * Error1_k_1 + Error1_k_2);
 
 				Out1 += deltaOut1;
+				
+				
+				if (deltaOut1>0)
+				{
+					deltaOut1+=20;
+				}
+				else if (deltaOut1<0)
+				{
+					deltaOut1-=25;
+				}
+				else
+				{
+					deltaOut1=0;
+				}
+				
 				Out1 = constrain(Out1, -300.0f, 300.0f);
 
 				Error1_k_2 = Error1_k_1;
